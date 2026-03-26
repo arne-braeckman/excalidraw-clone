@@ -53,3 +53,63 @@ button {
   cursor: pointer;
   color: inherit;
 }
+
+[data-theme="light"] {
+  --bg-color: #ffffff;
+  --panel-bg: rgba(255, 255, 255, 0.95);
+  --panel-border: rgba(0, 0, 0, 0.05);
+  --text-main: #1e1e1e;
+  --text-muted: #666666;
+  --accent-color: #6965db;
+  --accent-hover: #5854bb;
+  --item-hover: rgba(105, 101, 219, 0.1);
+  --item-active: rgba(105, 101, 219, 0.2);
+}
+
+[data-theme="dark"] {
+  --bg-color: #121212;
+  --panel-bg: rgba(30, 30, 30, 0.95);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --text-main: #f0f0f0;
+  --text-muted: #aaaaaa;
+  --accent-color: #a09cf0;
+  --accent-hover: #b0adff;
+  --item-hover: rgba(160, 156, 240, 0.15);
+  --item-active: rgba(160, 156, 240, 0.3);
+}
+
+[data-theme="neon"] {
+  --bg-color: #0a0014;
+  --panel-bg: rgba(20, 0, 40, 0.95);
+  --panel-border: rgba(0, 255, 255, 0.2);
+  --text-main: #f8f8ff;
+  --text-muted: #a090b0;
+  --accent-color: #00ffff;
+  --accent-hover: #00cccc;
+  --item-hover: rgba(0, 255, 255, 0.15);
+  --item-active: rgba(0, 255, 255, 0.3);
+}
+
+[data-theme="monokai"] {
+  --bg-color: #272822;
+  --panel-bg: #1e1f1c;
+  --panel-border: #4d4d4d;
+  --text-main: #f8f8f2;
+  --text-muted: #75715e;
+  --accent-color: #fd971f;
+  --accent-hover: #e6db74;
+  --item-hover: rgba(255, 255, 255, 0.05);
+  --item-active: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="nord"] {
+  --bg-color: #2e3440;
+  --panel-bg: #3b4252;
+  --panel-border: #4c566a;
+  --text-main: #eceff4;
+  --text-muted: #d8dee9;
+  --accent-color: #88c0d0;
+  --accent-hover: #81a1c1;
+  --item-hover: rgba(255, 255, 255, 0.05);
+  --item-active: rgba(255, 255, 255, 0.1);
+}

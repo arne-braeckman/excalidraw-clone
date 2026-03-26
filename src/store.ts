@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 
-export type ElementType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'pencil' | 'text';
+export type ElementType = 'select' | 'rectangle' | 'ellipse' | 'line' | 'pencil' | 'text' | 'image';
+
+export interface BoardMeta {
+  id: string;
+  name: string;
+  lastModified: number;
+}
 
 export interface ExcalidrawElement {
   id: string;
@@ -15,10 +21,21 @@ export interface ExcalidrawElement {
   strokeWidth: number;
   roughness: number;
   points?: { x: number; y: number }[]; // For lines and pencil
-  text?: string; // For text
+  text?: string; 
+  fontFamily?: string;
+  fontSize?: number;
+  startBinding?: string | null;
+  endBinding?: string | null;
+  startArrowhead?: string | null;
+  endArrowhead?: string | null;
+  seed: number;
+  dataUrl?: string;
 }
 
+export type AppTheme = 'light' | 'dark' | 'neon' | 'monokai' | 'nord';
+
 export interface AppState {
+  theme: AppTheme;
   zoom: number;
   scrollX: number;
   scrollY: number;
@@ -29,19 +46,31 @@ export interface AppState {
   fillStyle: string;
   strokeWidth: number;
   roughness: number;
+  fontFamily: string;
+  fontSize: number;
+  startArrowhead: string | null;
+  endArrowhead: string | null;
 }
 
-interface StoreState {
+export interface StoreState {
   elements: ExcalidrawElement[];
   appState: AppState;
+  currentUser: string | null;
+  boards: BoardMeta[];
+  currentBoardId: string | null;
+  currentBoardName: string;
   setElements: (elements: ExcalidrawElement[] | ((prev: ExcalidrawElement[]) => ExcalidrawElement[])) => void;
   setAppState: (state: Partial<AppState>) => void;
+  setCurrentUser: (user: string | null) => void;
+  setBoards: (boards: BoardMeta[] | ((prev: BoardMeta[]) => BoardMeta[])) => void;
+  setCurrentBoard: (id: string | null, name: string) => void;
   setActiveTool: (tool: ElementType) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
   elements: [],
   appState: {
+    theme: 'light',
     zoom: 1,
     scrollX: 0,
     scrollY: 0,
@@ -52,13 +81,22 @@ export const useStore = create<StoreState>((set) => ({
     fillStyle: 'hachure',
     strokeWidth: 1,
     roughness: 1,
+    fontFamily: 'Caveat, cursive',
+    fontSize: 24,
+    startArrowhead: null,
+    endArrowhead: 'arrow',
   },
-  setElements: (elements) => set((state) => ({
-    elements: typeof elements === 'function' ? elements(state.elements) : elements
+  currentUser: null,
+  boards: [],
+  currentBoardId: null,
+  currentBoardName: '',
+  setElements: (updater) => set((state) => ({ 
+    elements: typeof updater === 'function' ? updater(state.elements) : updater 
   })),
-  setAppState: (newState) => set((state) => ({
-    appState: { ...state.appState, ...newState }
-  })),
+  setAppState: (state) => set((prev) => ({ appState: { ...prev.appState, ...state } })),
+  setCurrentUser: (user) => set({ currentUser: user }),
+  setBoards: (updater) => set((state) => ({ boards: typeof updater === 'function' ? updater(state.boards) : updater })),
+  setCurrentBoard: (id, name) => set({ currentBoardId: id, currentBoardName: name }),
   setActiveTool: (tool) => set((state) => ({
     appState: { ...state.appState, activeTool: tool, selectedElementId: null }
   })),
