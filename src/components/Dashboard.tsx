@@ -27,11 +27,9 @@ export const Dashboard: React.FC = () => {
     }, [currentUser, setBoards]);
 
     const handleCreateBoard = () => {
-        const name = prompt("Enter a name for your new board:", "Untitled Board");
-        if (!name) return; 
         const newBoard: BoardMeta = {
             id: window.crypto.randomUUID(),
-            name,
+            name: "Untitled Board",
             lastModified: Date.now()
         };
         const newBoards = [...boards, newBoard];

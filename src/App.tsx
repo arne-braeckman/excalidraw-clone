@@ -296,17 +296,7 @@ function App() {
         </button>
         <button className="tool-btn" title="New Board" onClick={() => {
             const state = useStore.getState();
-            if (state.currentBoardName === 'Untitled Board' || !state.currentBoardName.trim()) {
-                const newName = prompt("Save your current board before continuing. Enter board name:", state.currentBoardName);
-                if (newName) {
-                    const updatedBoards = state.boards.map(b => b.id === currentBoardId ? { ...b, name: newName } : b);
-                    state.setBoards(updatedBoards);
-                    set(`user-${currentUser}-boards`, updatedBoards);
-                } else return;
-            }
-            const nextName = prompt("Enter a name for your new board:", "Untitled Board");
-            if (!nextName) return;
-            const newBoard = { id: window.crypto.randomUUID(), name: nextName, lastModified: Date.now() };
+            const newBoard = { id: window.crypto.randomUUID(), name: "Untitled Board", lastModified: Date.now() };
             const newBoardsList = [...state.boards, newBoard];
             state.setBoards(newBoardsList);
             set(`user-${currentUser}-boards`, newBoardsList);
