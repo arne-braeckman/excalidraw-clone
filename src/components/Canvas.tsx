@@ -12,7 +12,7 @@ interface TextInputState {
 export const Canvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
-  const { elements, appState, setAppState, setElements } = useStore();
+  const { elements, appState, setAppState, setElements, clipboard, setClipboard } = useStore();
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(null);
   const [textInput, setTextInput] = useState<TextInputState | null>(null);
@@ -616,10 +616,55 @@ export const Canvas: React.FC = () => {
                e.preventDefault();
            }
        }
+
+       // COPY
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selectedElementId && !textInput) {
+           const el = elements.find(e => e.id === selectedElementId);
+           if (el) {
+               setClipboard(JSON.parse(JSON.stringify(el)));
+           }
+       }
+
+       // PASTE
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && clipboard && !textInput) {
+           const newId = window.crypto.randomUUID();
+           const newEl: CanvasElement = JSON.parse(JSON.stringify(clipboard));
+           newEl.id = newId;
+           newEl.x += 20;
+           newEl.y += 20;
+           if (newEl.points) {
+               newEl.points = newEl.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
+           }
+           newEl.seed = Math.floor(Math.random() * 100000000);
+           
+           setElements(prev => [...prev, newEl]);
+           setAppState({ selectedElementId: newId });
+           setClipboard(newEl);
+       }
+
+       // DUPLICATE
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedElementId && !textInput) {
+           e.preventDefault(); 
+           const el = elements.find(e => e.id === selectedElementId);
+           if (el) {
+               const newId = window.crypto.randomUUID();
+               const newEl: CanvasElement = JSON.parse(JSON.stringify(el));
+               newEl.id = newId;
+               newEl.x += 20;
+               newEl.y += 20;
+               if (newEl.points) {
+                   newEl.points = newEl.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
+               }
+               newEl.seed = Math.floor(Math.random() * 100000000);
+               
+               setElements(prev => [...prev, newEl]);
+               setAppState({ selectedElementId: newId });
+           }
+       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElementId, elements, setElements, textInput, setAppState]);
+  }, [selectedElementId, elements, setElements, textInput, setAppState, clipboard, setClipboard]);
 
   return (
     <React.Fragment>

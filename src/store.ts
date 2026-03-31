@@ -54,12 +54,14 @@ export interface AppState {
 
 export interface StoreState {
   elements: CanvasElement[];
+  clipboard: CanvasElement | null;
   appState: AppState;
   currentUser: string | null;
   boards: BoardMeta[];
   currentBoardId: string | null;
   currentBoardName: string;
   setElements: (elements: CanvasElement[] | ((prev: CanvasElement[]) => CanvasElement[])) => void;
+  setClipboard: (element: CanvasElement | null) => void;
   setAppState: (state: Partial<AppState>) => void;
   setCurrentUser: (user: string | null) => void;
   setBoards: (boards: BoardMeta[] | ((prev: BoardMeta[]) => BoardMeta[])) => void;
@@ -69,6 +71,7 @@ export interface StoreState {
 
 export const useStore = create<StoreState>((set) => ({
   elements: [],
+  clipboard: null,
   appState: {
     theme: 'light',
     zoom: 1,
@@ -93,6 +96,7 @@ export const useStore = create<StoreState>((set) => ({
   setElements: (updater) => set((state) => ({ 
     elements: typeof updater === 'function' ? updater(state.elements) : updater 
   })),
+  setClipboard: (element) => set({ clipboard: element }),
   setAppState: (state) => set((prev) => ({ appState: { ...prev.appState, ...state } })),
   setCurrentUser: (user) => set({ currentUser: user }),
   setBoards: (updater) => set((state) => ({ boards: typeof updater === 'function' ? updater(state.boards) : updater })),
