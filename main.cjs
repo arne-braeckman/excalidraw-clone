@@ -8,7 +8,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'Excalidraw Clone',
+    title: 'Canvas',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false

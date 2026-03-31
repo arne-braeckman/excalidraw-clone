@@ -22,7 +22,7 @@ export const LoginScreen: React.FC = () => {
    const setCurrentUser = useStore(state => state.setCurrentUser);
 
    const finishLogin = (username: string) => {
-       localStorage.setItem('excalidraw-user', username);
+       localStorage.setItem('canvas-user', username);
        setCurrentUser(username);
    }
 
@@ -30,7 +30,7 @@ export const LoginScreen: React.FC = () => {
        e.preventDefault();
        setError('');
        
-       const users = await get('excalidraw-auth-users') || {};
+       const users = await get('canvas-auth-users') || {};
 
        if (mode === 'register') {
            if (!name || !email || !password) return setError("All fields are required");
@@ -38,7 +38,7 @@ export const LoginScreen: React.FC = () => {
            
            const hash = await hashPassword(password);
            users[email] = { name, hash };
-           await set('excalidraw-auth-users', users);
+           await set('canvas-auth-users', users);
            finishLogin(name);
        } 
        else if (mode === 'login') {
@@ -84,7 +84,7 @@ export const LoginScreen: React.FC = () => {
                         <span style={{textAlign: 'center', fontSize: '15px'}}>Secure magic link successfully generated for <b>{email}</b>!</span>
                         <span style={{textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)'}}>(Since this is a strictly decentralized offline app without a physical mail server connection, use the developer button below to simulate securely clicking the email payload link)</span>
                         <button onClick={async () => {
-                            const users = await get('excalidraw-auth-users') || {};
+                            const users = await get('canvas-auth-users') || {};
                             finishLogin(users[email].name);
                         }} style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-color)', color: '#fff', padding: '14px 20px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, fontSize: '16px', width: '100%', justifyContent: 'center', transition: '0.2s' }}>
                             Simulate Magic Link <ArrowRight size={20} />

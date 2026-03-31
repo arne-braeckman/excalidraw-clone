@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useStore, type ExcalidrawElement } from '../store';
+import { useStore, type CanvasElement } from '../store';
 import rough from 'roughjs/bin/rough';
 
 interface TextInputState {
@@ -14,7 +14,7 @@ export const Canvas: React.FC = () => {
   const imageCache = useRef<Record<string, HTMLImageElement>>({});
   const { elements, appState, setAppState, setElements } = useStore();
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentElement, setCurrentElement] = useState<ExcalidrawElement | null>(null);
+  const [currentElement, setCurrentElement] = useState<CanvasElement | null>(null);
   const [textInput, setTextInput] = useState<TextInputState | null>(null);
   
   const selectedElementId = appState.selectedElementId;
@@ -54,7 +54,7 @@ export const Canvas: React.FC = () => {
         return Math.abs(hash);
       };
 
-      const drawElement = (el: ExcalidrawElement) => {
+      const drawElement = (el: CanvasElement) => {
         const options = {
           stroke: el.strokeColor,
           fill: el.backgroundColor === 'transparent' ? undefined : el.backgroundColor,
@@ -259,7 +259,7 @@ export const Canvas: React.FC = () => {
     return { x, y };
   };
 
-  const isPointInElement = (x: number, y: number, el: ExcalidrawElement) => {
+  const isPointInElement = (x: number, y: number, el: CanvasElement) => {
     let minX = Math.min(el.x, el.x + el.width);
     let maxX = Math.max(el.x, el.x + el.width);
     let minY = Math.min(el.y, el.y + el.height);
@@ -292,14 +292,14 @@ export const Canvas: React.FC = () => {
     return x >= minX && x <= maxX && y >= minY && y <= maxY;
   };
 
-  const isPointInResizeHandle = (x: number, y: number, el: ExcalidrawElement) => {
+  const isPointInResizeHandle = (x: number, y: number, el: CanvasElement) => {
     if (el.type === 'text' || el.type === 'pencil' || el.type === 'line') return false; 
     const maxX = Math.max(el.x, el.x + el.width);
     const maxY = Math.max(el.y, el.y + el.height);
     return x >= maxX - 6 && x <= maxX + 6 && y >= maxY - 6 && y <= maxY + 6;
   };
 
-  const getLineHandleClicked = (x: number, y: number, el: ExcalidrawElement) => {
+  const getLineHandleClicked = (x: number, y: number, el: CanvasElement) => {
     if (el.type !== 'line' || !el.points) return null;
     const pts = el.points;
     if (pts.length === 2) {
@@ -363,7 +363,7 @@ export const Canvas: React.FC = () => {
     }
 
     const id = window.crypto.randomUUID();
-    const newElement: ExcalidrawElement = {
+    const newElement: CanvasElement = {
       id,
       type: appState.activeTool,
       x,

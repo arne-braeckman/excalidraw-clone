@@ -13,7 +13,7 @@ export const Dashboard: React.FC = () => {
                 if (savedBoards && savedBoards.length > 0) {
                     setBoards(savedBoards);
                 } else {
-                    get('excalidraw-elements').then((legacy) => {
+                    get('canvas-elements').then((legacy) => {
                        if (legacy && legacy.length > 0) {
                            const legacyBoard = { id: 'legacy', name: 'Legacy Board', lastModified: Date.now() };
                            setBoards([legacyBoard]);
@@ -48,7 +48,7 @@ export const Dashboard: React.FC = () => {
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('excalidraw-user');
+        localStorage.removeItem('canvas-user');
         setCurrentUser(null);
         setCurrentBoard(null, '');
     };

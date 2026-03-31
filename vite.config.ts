@@ -9,22 +9,22 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      includeAssets: ['favicon.png', 'icons.svg'],
       manifest: {
-        name: 'Excalidraw Clone',
-        short_name: 'Excalidraw',
-        description: 'A local-first Excalidraw clone',
+        name: 'Canvas',
+        short_name: 'Canvas',
+        description: 'A local-first Canvas app',
         theme_color: '#ffffff',
         icons: [
           {
-            src: 'favicon.svg',
+            src: 'favicon.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png'
           },
           {
-            src: 'favicon.svg',
+            src: 'favicon.png',
             sizes: '512x512',
-            type: 'image/svg+xml'
+            type: 'image/png'
           }
         ]
       }

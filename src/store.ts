@@ -8,7 +8,7 @@ export interface BoardMeta {
   lastModified: number;
 }
 
-export interface ExcalidrawElement {
+export interface CanvasElement {
   id: string;
   type: ElementType;
   x: number;
@@ -53,13 +53,13 @@ export interface AppState {
 }
 
 export interface StoreState {
-  elements: ExcalidrawElement[];
+  elements: CanvasElement[];
   appState: AppState;
   currentUser: string | null;
   boards: BoardMeta[];
   currentBoardId: string | null;
   currentBoardName: string;
-  setElements: (elements: ExcalidrawElement[] | ((prev: ExcalidrawElement[]) => ExcalidrawElement[])) => void;
+  setElements: (elements: CanvasElement[] | ((prev: CanvasElement[]) => CanvasElement[])) => void;
   setAppState: (state: Partial<AppState>) => void;
   setCurrentUser: (user: string | null) => void;
   setBoards: (boards: BoardMeta[] | ((prev: BoardMeta[]) => BoardMeta[])) => void;

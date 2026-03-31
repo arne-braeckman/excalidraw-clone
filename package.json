@@ -1,5 +1,5 @@
 {
-  "name": "excalidraw-clone",
+  "name": "canvas",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,8 +14,8 @@
     "electron:build": "npm run build && electron-builder build --mac"
   },
   "build": {
-    "appId": "com.excalidrawclone.app",
-    "productName": "Excalidraw Clone",
+    "appId": "com.canvas.app",
+    "productName": "Canvas",
     "directories": {
       "output": "dist_electron"
     },

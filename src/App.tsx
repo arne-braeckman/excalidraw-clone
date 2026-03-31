@@ -42,7 +42,7 @@ function App() {
 
   // Load state on startup
   useEffect(() => {
-     const savedUser = localStorage.getItem('excalidraw-user');
+     const savedUser = localStorage.getItem('canvas-user');
      if (savedUser) setCurrentUser(savedUser);
      setLoaded(true);
   }, [setCurrentUser]);
@@ -245,7 +245,7 @@ function App() {
   const handleExportJSON = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ elements }));
     const link = document.createElement('a');
-    link.download = 'excalidraw-clone-export.json';
+    link.download = 'canvas-export.json';
     link.href = dataStr;
     link.click();
   };
@@ -255,7 +255,7 @@ function App() {
     if (!canvas) return;
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.download = 'excalidraw-clone-export.png';
+    link.download = 'canvas-export.png';
     link.href = dataUrl;
     link.click();
   };
@@ -278,7 +278,7 @@ function App() {
       format: [pdfWidth, pdfHeight]
     });
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save('excalidraw-clone-export.pdf');
+    pdf.save('canvas-export.pdf');
   };
 
   if (!loaded) return null;
@@ -384,7 +384,7 @@ function App() {
         <input 
            id="json-import-input"
            type="file" 
-           accept=".json,.excalidraw" 
+           accept=".json,.canvas" 
            style={{ display: 'none' }} 
            onChange={handleJsonImport} 
         />
