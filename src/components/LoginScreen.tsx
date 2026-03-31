@@ -1,15 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { get, set } from 'idb-keyval';
-import { KeyRound, Mail, UserPlus, ArrowRight } from 'lucide-react';
-
-// Cryptographic hash for offline-first local security
-async function hashPassword(password: string) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await window.crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+import { KeyRound, Mail, UserPlus } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export const LoginScreen: React.FC = () => {
    const [mode, setMode] = useState<'login' | 'register' | 'magic'>('login');
@@ -21,41 +13,30 @@ export const LoginScreen: React.FC = () => {
    
    const setCurrentUser = useStore(state => state.setCurrentUser);
 
-   const finishLogin = (username: string) => {
-       localStorage.setItem('canvas-user', username);
-       setCurrentUser(username);
-   }
-
    const handleAction = async (e: React.FormEvent) => {
        e.preventDefault();
        setError('');
        
-       const users = await get('canvas-auth-users') || {};
-
        if (mode === 'register') {
            if (!name || !email || !password) return setError("All fields are required");
-           if (users[email]) return setError("Email is already registered. Please login.");
-           
-           const hash = await hashPassword(password);
-           users[email] = { name, hash };
-           await set('canvas-auth-users', users);
-           finishLogin(name);
+           const { data, error } = await supabase.auth.signUp({
+               email,
+               password,
+               options: { data: { name } }
+           });
+           if (error) return setError(error.message);
+           if (data.user) setCurrentUser(data.user.id);
        } 
        else if (mode === 'login') {
            if (!email || !password) return setError("All fields are required");
-           const user = users[email];
-           if (!user) return setError("Invalid email or password");
-           
-           const hashed = await hashPassword(password);
-           if (user.hash !== hashed) return setError("Invalid email or password");
-           
-           finishLogin(user.name);
+           const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+           if (error) return setError(error.message);
+           if (data.user) setCurrentUser(data.user.id);
        }
        else if (mode === 'magic') {
            if (!email) return setError("Email is required");
-           const user = users[email];
-           if (!user) return setError("No account found with this email");
-           
+           const { error } = await supabase.auth.signInWithOtp({ email });
+           if (error) return setError(error.message);
            setMagicSent(true);
        }
    };
@@ -82,13 +63,7 @@ export const LoginScreen: React.FC = () => {
                 {magicSent ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', padding: '24px', border: '2px dashed var(--accent-color)', borderRadius: '12px', background: 'rgba(0,122,255,0.05)' }}>
                         <span style={{textAlign: 'center', fontSize: '15px'}}>Secure magic link successfully generated for <b>{email}</b>!</span>
-                        <span style={{textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)'}}>(Since this is a strictly decentralized offline app without a physical mail server connection, use the developer button below to simulate securely clicking the email payload link)</span>
-                        <button onClick={async () => {
-                            const users = await get('canvas-auth-users') || {};
-                            finishLogin(users[email].name);
-                        }} style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-color)', color: '#fff', padding: '14px 20px', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, fontSize: '16px', width: '100%', justifyContent: 'center', transition: '0.2s' }}>
-                            Simulate Magic Link <ArrowRight size={20} />
-                        </button>
+                        <span style={{textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)'}}>Please check your email. Click the secure link inside to automatically authenticate.</span>
                     </div>
                 ) : (
                     <form onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

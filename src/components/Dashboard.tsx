@@ -1,24 +1,34 @@
 import React, { useEffect } from 'react';
 import { useStore } from '../store';
 import type { BoardMeta } from '../store';
-import { get, set } from 'idb-keyval';
+import { get } from 'idb-keyval';
 import { Plus, LogOut, FileEdit } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export const Dashboard: React.FC = () => {
     const { currentUser, boards, setBoards, setCurrentBoard, setElements, setCurrentUser } = useStore();
 
     useEffect(() => {
         if (currentUser) {
-            get(`user-${currentUser}-boards`).then((savedBoards) => {
-                if (savedBoards && savedBoards.length > 0) {
-                    setBoards(savedBoards);
+            supabase.from('canvas_boards')
+                .select('*')
+                .eq('user_id', currentUser)
+                .order('last_modified', { ascending: false })
+                .then(({ data }) => {
+                if (data && data.length > 0) {
+                    setBoards(data.map(d => ({ id: d.id, name: d.name, lastModified: d.last_modified })));
                 } else {
-                    get('canvas-elements').then((legacy) => {
+                    get('canvas-elements').then(async (legacy) => {
                        if (legacy && legacy.length > 0) {
-                           const legacyBoard = { id: 'legacy', name: 'Legacy Board', lastModified: Date.now() };
+                           const legacyBoard = { id: window.crypto.randomUUID(), name: 'Legacy Offline Board', lastModified: Date.now() };
+                           await supabase.from('canvas_boards').insert({
+                               id: legacyBoard.id,
+                               user_id: currentUser,
+                               name: legacyBoard.name,
+                               elements: legacy,
+                               last_modified: legacyBoard.lastModified
+                           });
                            setBoards([legacyBoard]);
-                           set(`user-${currentUser}-boards`, [legacyBoard]);
-                           set('board-legacy', legacy);
                        }
                     });
                 }
@@ -26,29 +36,37 @@ export const Dashboard: React.FC = () => {
         }
     }, [currentUser, setBoards]);
 
-    const handleCreateBoard = () => {
+    const handleCreateBoard = async () => {
         const newBoard: BoardMeta = {
             id: window.crypto.randomUUID(),
             name: "Untitled Board",
             lastModified: Date.now()
         };
-        const newBoards = [...boards, newBoard];
-        setBoards(newBoards);
-        set(`user-${currentUser}-boards`, newBoards);
         
+        await supabase.from('canvas_boards').insert({
+            id: newBoard.id,
+            user_id: currentUser,
+            name: newBoard.name,
+            elements: [],
+            last_modified: newBoard.lastModified
+        });
+
+        const newBoards = [newBoard, ...boards];
+        setBoards(newBoards);
         setElements([]);
         setCurrentBoard(newBoard.id, newBoard.name);
     };
 
-    const handleOpenBoard = (board: BoardMeta) => {
-        get(`board-${board.id}`).then((elements) => {
-            setElements(elements || []);
+    const handleOpenBoard = async (board: BoardMeta) => {
+        const { data } = await supabase.from('canvas_boards').select('elements').eq('id', board.id).single();
+        if (data) {
+            setElements(data.elements || []);
             setCurrentBoard(board.id, board.name);
-        });
+        }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('canvas-user');
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
         setCurrentUser(null);
         setCurrentBoard(null, '');
     };

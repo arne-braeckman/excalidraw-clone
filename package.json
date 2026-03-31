@@ -1,7 +1,7 @@
 {
   "name": "canvas",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
@@ -33,6 +33,7 @@
     }
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.101.0",
     "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.6.0",

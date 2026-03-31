@@ -10,7 +10,7 @@ import './App.css';
 import { useStore } from './store';
 import { Canvas } from './components/Canvas';
 import { useEffect, useState } from 'react';
-import { set } from 'idb-keyval';
+import { supabase } from './supabaseClient';
 
 const THEME_PALETTES = {
   light: {
@@ -42,24 +42,35 @@ function App() {
 
   // Load state on startup
   useEffect(() => {
-     const savedUser = localStorage.getItem('canvas-user');
-     if (savedUser) setCurrentUser(savedUser);
-     setLoaded(true);
+     supabase.auth.getSession().then(({ data: { session } }) => {
+         if (session?.user) setCurrentUser(session.user.id);
+         setLoaded(true);
+     });
+     
+     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+         setCurrentUser(session?.user?.id || null);
+     });
+     
+     return () => subscription.unsubscribe();
   }, [setCurrentUser]);
 
-  // Save state continuously FOR CURRENT BOARD
+  // Sync state continuously FOR CURRENT BOARD
   useEffect(() => {
-    if (loaded && currentBoardId) {
-      set(`board-${currentBoardId}`, elements);
+    if (loaded && currentBoardId && currentUser) {
+      const timer = setTimeout(() => {
+          supabase.from('canvas_boards').update({
+              elements,
+              last_modified: Date.now()
+          }).eq('id', currentBoardId).eq('user_id', currentUser).then(() => {
+              const state = useStore.getState();
+              const updatedBoards = state.boards.map(b => b.id === currentBoardId ? { ...b, lastModified: Date.now() } : b);
+              state.setBoards(updatedBoards);
+          });
+      }, 1500); // Debounce saves to restrict cloud API usage frequency
       
-      const state = useStore.getState();
-      if (state.currentUser) {
-          const updatedBoards = state.boards.map(b => b.id === currentBoardId ? { ...b, lastModified: Date.now() } : b);
-          state.setBoards(updatedBoards);
-          set(`user-${state.currentUser}-boards`, updatedBoards);
-      }
+      return () => clearTimeout(timer);
     }
-  }, [elements, loaded, currentBoardId]);
+  }, [elements, loaded, currentBoardId, currentUser]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', appState.theme);
@@ -294,12 +305,20 @@ function App() {
         <button className="tool-btn" title="Back to Dashboard" onClick={() => useStore.getState().setCurrentBoard(null, '')}>
           <Home size={16} />
         </button>
-        <button className="tool-btn" title="New Board" onClick={() => {
+        <button className="tool-btn" title="New Board" onClick={async () => {
             const state = useStore.getState();
             const newBoard = { id: window.crypto.randomUUID(), name: "Untitled Board", lastModified: Date.now() };
-            const newBoardsList = [...state.boards, newBoard];
+            
+            await supabase.from('canvas_boards').insert({
+                id: newBoard.id,
+                user_id: currentUser,
+                name: newBoard.name,
+                elements: [],
+                last_modified: newBoard.lastModified
+            });
+
+            const newBoardsList = [newBoard, ...state.boards];
             state.setBoards(newBoardsList);
-            set(`user-${currentUser}-boards`, newBoardsList);
             state.setElements([]);
             state.setCurrentBoard(newBoard.id, newBoard.name);
         }}>
@@ -309,13 +328,15 @@ function App() {
         <input 
            title="Rename Board"
            value={useStore.getState().currentBoardName}
-           onChange={(e) => {
+           onChange={async (e) => {
                const val = e.target.value;
                useStore.getState().setCurrentBoard(currentBoardId, val);
+               
+               await supabase.from('canvas_boards').update({ name: val }).eq('id', currentBoardId);
+               
                const state = useStore.getState();
                const updatedBoards = state.boards.map(b => b.id === currentBoardId ? { ...b, name: val } : b);
                state.setBoards(updatedBoards);
-               set(`user-${currentUser}-boards`, updatedBoards);
            }}
            style={{ background: 'transparent', border: '1px solid transparent', color: 'var(--text-main)', fontSize: '14px', fontWeight: 600, width: '140px', outline: 'none', padding: '4px', borderRadius: '4px' }}
            onFocus={e => e.target.style.border = '1px solid var(--accent-color)'}
