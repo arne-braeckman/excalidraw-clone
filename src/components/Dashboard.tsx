@@ -6,7 +6,7 @@ import { Plus, LogOut, FileEdit } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 export const Dashboard: React.FC = () => {
-    const { currentUser, boards, setBoards, setCurrentBoard, setElements, setCurrentUser } = useStore();
+    const { currentUser, currentUserName, boards, setBoards, setCurrentBoard, setElements, setCurrentUser } = useStore();
 
     useEffect(() => {
         if (currentUser) {
@@ -74,7 +74,7 @@ export const Dashboard: React.FC = () => {
     return (
         <div style={{ padding: '48px', width: '100vw', height: '100vh', background: 'var(--bg-color)', color: 'var(--text-main)', boxSizing: 'border-box', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '48px' }}>
-                <h1 style={{margin: 0, fontSize: '36px'}}>Good to see you, {currentUser}.</h1>
+                <h1 style={{margin: 0, fontSize: '36px'}}>Good to see you, {currentUserName || 'Guest'}.</h1>
                 <button onClick={handleLogout} className="tool-btn" style={{ width: 'auto', padding: '8px 16px', border: '1px solid var(--panel-border)' }}><LogOut size={16} /><span style={{marginLeft: '8px'}}>Logout</span></button>
             </div>
             

@@ -40,7 +40,7 @@ export interface AppState {
   scrollX: number;
   scrollY: number;
   activeTool: ElementType;
-  selectedElementId: string | null;
+  selectedElementIds: string[];
   strokeColor: string;
   backgroundColor: string;
   fillStyle: string;
@@ -54,16 +54,18 @@ export interface AppState {
 
 export interface StoreState {
   elements: CanvasElement[];
-  clipboard: CanvasElement | null;
+  clipboard: CanvasElement[];
   appState: AppState;
   currentUser: string | null;
+  currentUserName: string | null;
   boards: BoardMeta[];
   currentBoardId: string | null;
   currentBoardName: string;
   setElements: (elements: CanvasElement[] | ((prev: CanvasElement[]) => CanvasElement[])) => void;
-  setClipboard: (element: CanvasElement | null) => void;
+  setClipboard: (elements: CanvasElement[]) => void;
   setAppState: (state: Partial<AppState>) => void;
   setCurrentUser: (user: string | null) => void;
+  setCurrentUserName: (name: string | null) => void;
   setBoards: (boards: BoardMeta[] | ((prev: BoardMeta[]) => BoardMeta[])) => void;
   setCurrentBoard: (id: string | null, name: string) => void;
   setActiveTool: (tool: ElementType) => void;
@@ -71,14 +73,14 @@ export interface StoreState {
 
 export const useStore = create<StoreState>((set) => ({
   elements: [],
-  clipboard: null,
+  clipboard: [],
   appState: {
     theme: 'light',
     zoom: 1,
     scrollX: 0,
     scrollY: 0,
     activeTool: 'select',
-    selectedElementId: null,
+    selectedElementIds: [],
     strokeColor: '#1e1e1e',
     backgroundColor: 'transparent',
     fillStyle: 'hachure',
@@ -90,18 +92,20 @@ export const useStore = create<StoreState>((set) => ({
     endArrowhead: 'arrow',
   },
   currentUser: null,
+  currentUserName: null,
   boards: [],
   currentBoardId: null,
   currentBoardName: '',
   setElements: (updater) => set((state) => ({ 
     elements: typeof updater === 'function' ? updater(state.elements) : updater 
   })),
-  setClipboard: (element) => set({ clipboard: element }),
+  setClipboard: (els) => set({ clipboard: els }),
   setAppState: (state) => set((prev) => ({ appState: { ...prev.appState, ...state } })),
   setCurrentUser: (user) => set({ currentUser: user }),
+  setCurrentUserName: (name) => set({ currentUserName: name }),
   setBoards: (updater) => set((state) => ({ boards: typeof updater === 'function' ? updater(state.boards) : updater })),
   setCurrentBoard: (id, name) => set({ currentBoardId: id, currentBoardName: name }),
   setActiveTool: (tool) => set((state) => ({
-    appState: { ...state.appState, activeTool: tool, selectedElementId: null }
+    appState: { ...state.appState, activeTool: tool, selectedElementIds: [] }
   })),
 }));

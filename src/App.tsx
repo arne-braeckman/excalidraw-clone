@@ -36,23 +36,27 @@ const THEME_PALETTES = {
 };
 
 function App() {
-  const { elements, appState, setActiveTool, setAppState, setElements, currentUser, currentBoardId, setCurrentUser } = useStore();
-  const { activeTool, zoom, selectedElementId } = appState;
+  const { elements, appState, setActiveTool, setAppState, setElements, currentUser, currentBoardId, setCurrentUser, setCurrentUserName } = useStore();
+  const { activeTool, zoom, selectedElementIds } = appState;
   const [loaded, setLoaded] = useState(false);
 
   // Load state on startup
   useEffect(() => {
      supabase.auth.getSession().then(({ data: { session } }) => {
-         if (session?.user) setCurrentUser(session.user.id);
+         if (session?.user) {
+            setCurrentUser(session.user.id);
+            setCurrentUserName(session.user.user_metadata?.name || session.user.email || 'Guest');
+         }
          setLoaded(true);
      });
      
      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
          setCurrentUser(session?.user?.id || null);
+         setCurrentUserName(session?.user?.user_metadata?.name || session?.user?.email || null);
      });
      
      return () => subscription.unsubscribe();
-  }, [setCurrentUser]);
+  }, [setCurrentUser, setCurrentUserName]);
 
   // Sync state continuously FOR CURRENT BOARD
   useEffect(() => {
@@ -82,6 +86,9 @@ function App() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
+      
+      // Prevent shortcut interference if command/control modifiers are active 
+      if (e.metaKey || e.ctrlKey) return;
 
       switch (e.key.toLowerCase()) {
         case 'r': setActiveTool('rectangle'); break;
@@ -104,15 +111,15 @@ function App() {
 
   const handleColorChange = (color: string) => {
     setAppState({ strokeColor: color });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, strokeColor: color } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, strokeColor: color } : el));
     }
   };
 
   const handleBgColorChange = (color: string) => {
     setAppState({ backgroundColor: color });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, backgroundColor: color } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, backgroundColor: color } : el));
     }
   };
 
@@ -160,29 +167,29 @@ function App() {
   
   const handleFillStyle = (style: string) => {
     setAppState({ fillStyle: style });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, fillStyle: style } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, fillStyle: style } : el));
     }
   };
   
   const handleRoughness = (r: number) => {
     setAppState({ roughness: r });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, roughness: r } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, roughness: r } : el));
     }
   };
 
   const handleFontFamily = (f: string) => {
     setAppState({ fontFamily: f });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, fontFamily: f } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, fontFamily: f } : el));
     }
   };
 
   const handleFontSize = (s: number) => {
     setAppState({ fontSize: s });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, fontSize: s } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, fontSize: s } : el));
     }
   };
 
@@ -211,7 +218,7 @@ function App() {
             seed: Math.floor(Math.random() * 100000000)
          };
          setElements(prev => [...prev, newElement]);
-         setAppState({activeTool: 'select', selectedElementId: id});
+         setAppState({activeTool: 'select', selectedElementIds: [id]});
       };
       img.src = dataUrl;
     };
@@ -222,16 +229,16 @@ function App() {
   const handleStartArrowToggle = () => {
     const val = appState.startArrowhead === 'arrow' ? null : 'arrow';
     setAppState({ startArrowhead: val });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, startArrowhead: val } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, startArrowhead: val } : el));
     }
   };
 
   const handleEndArrowToggle = () => {
     const val = appState.endArrowhead === 'arrow' ? null : 'arrow';
     setAppState({ endArrowhead: val });
-    if (selectedElementId) {
-      setElements(prev => prev.map(el => el.id === selectedElementId ? { ...el, endArrowhead: val } : el));
+    if (selectedElementIds.length > 0) {
+      setElements(prev => prev.map(el => selectedElementIds.includes(el.id) ? { ...el, endArrowhead: val } : el));
     }
   };
 
@@ -589,7 +596,7 @@ function App() {
         </div>
 
         {/* Arrowheads for lines */}
-        {(appState.activeTool === 'line' || (selectedElementId && elements.find(e => e.id === selectedElementId)?.type === 'line')) && (
+        {(appState.activeTool === 'line' || elements.some(e => selectedElementIds.includes(e.id) && e.type === 'line')) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Arrowheads</span>
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>

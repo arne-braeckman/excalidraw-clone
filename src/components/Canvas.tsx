@@ -17,10 +17,46 @@ export const Canvas: React.FC = () => {
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(null);
   const [textInput, setTextInput] = useState<TextInputState | null>(null);
   
-  const selectedElementId = appState.selectedElementId;
-  const [dragOffset, setDragOffset] = useState<{x: number, y: number} | null>(null);
+  const selectedElementIds = appState.selectedElementIds || [];
+  const [lastPointerPos, setLastPointerPos] = useState<{x: number, y: number} | null>(null);
   const [isResizing, setIsResizing] = useState(false);
   const [draggingLinePoint, setDraggingLinePoint] = useState<number | null>(null);
+  const [connectorTarget, setConnectorTarget] = useState<{ elementId: string; point: { x: number; y: number } } | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+
+  const CONNECTOR_SNAP_DISTANCE = 30;
+
+  const getConnectorPoints = (el: CanvasElement): { x: number; y: number }[] => {
+    if (el.type === 'line' || el.type === 'pencil' || el.type === 'text') return [];
+    const minX = Math.min(el.x, el.x + el.width);
+    const minY = Math.min(el.y, el.y + el.height);
+    const w = Math.abs(el.width);
+    const h = Math.abs(el.height);
+    return [
+      { x: minX + w / 2, y: minY },         // top
+      { x: minX + w, y: minY + h / 2 },     // right
+      { x: minX + w / 2, y: minY + h },      // bottom
+      { x: minX, y: minY + h / 2 },          // left
+    ];
+  };
+
+  const findNearestConnector = (px: number, py: number, excludeId?: string): { elementId: string; point: { x: number; y: number } } | null => {
+    let best: { elementId: string; point: { x: number; y: number }; dist: number } | null = null;
+    for (const el of elements) {
+      if (el.id === excludeId) continue;
+      if (el.type === 'line' || el.type === 'pencil' || el.type === 'text') continue;
+      const connectors = getConnectorPoints(el);
+      for (const cp of connectors) {
+        const dist = Math.hypot(px - cp.x, py - cp.y);
+        if (dist < CONNECTOR_SNAP_DISTANCE && (!best || dist < best.dist)) {
+          best = { elementId: el.id, point: cp, dist };
+        }
+      }
+    }
+    return best ? { elementId: best.elementId, point: best.point } : null;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -169,7 +205,7 @@ export const Canvas: React.FC = () => {
         }
 
         // Draw selection box
-        if (el.id === selectedElementId && !textInput) {
+        if (selectedElementIds.includes(el.id) && !textInput) {
           ctx.strokeStyle = '#6965db';
           ctx.lineWidth = 1;
           ctx.setLineDash([5, 5]);
@@ -234,13 +270,31 @@ export const Canvas: React.FC = () => {
         drawElement(currentElement);
       }
 
+      // Draw connector spots on target element
+      if (connectorTarget) {
+        const targetEl = elements.find(e => e.id === connectorTarget.elementId);
+        if (targetEl) {
+          const connectors = getConnectorPoints(targetEl);
+          connectors.forEach(cp => {
+            const isSnapped = cp.x === connectorTarget.point.x && cp.y === connectorTarget.point.y;
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, isSnapped ? 6 : 4, 0, Math.PI * 2);
+            ctx.fillStyle = isSnapped ? '#6965db' : 'rgba(105, 101, 219, 0.4)';
+            ctx.fill();
+            ctx.strokeStyle = '#6965db';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          });
+        }
+      }
+
       ctx.restore();
     };
 
     draw();
     window.addEventListener('resize', draw);
     return () => window.removeEventListener('resize', draw);
-  }, [elements, currentElement, appState.zoom, appState.scrollX, appState.scrollY, selectedElementId, textInput]);
+  }, [elements, currentElement, appState.zoom, appState.scrollX, appState.scrollY, selectedElementIds, textInput, connectorTarget]);
 
   const getPointerCoords = (e: React.PointerEvent | React.MouseEvent | React.TouchEvent) => {
     let clientX = 0, clientY = 0;
@@ -317,17 +371,26 @@ export const Canvas: React.FC = () => {
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return; 
-    const { x, y } = getPointerCoords(e);
+    if (e.button !== 0) return;
 
     if (textInput) {
-       return; 
+       return;
     }
+
+    // Spacebar panning or middle-click
+    if (spaceHeld) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
+
+    const { x, y } = getPointerCoords(e);
 
     if (appState.activeTool === 'select') {
       for (let i = elements.length - 1; i >= 0; i--) {
         const el = elements[i];
-        if (el.id === selectedElementId && el.type === 'line') {
+        if (selectedElementIds.length === 1 && selectedElementIds[0] === el.id && el.type === 'line') {
           const handleIdx = getLineHandleClicked(x, y, el);
           if (handleIdx !== null) {
             setDraggingLinePoint(handleIdx);
@@ -337,7 +400,7 @@ export const Canvas: React.FC = () => {
           }
         }
 
-        if (el.id === selectedElementId && isPointInResizeHandle(x, y, el)) {
+        if (selectedElementIds.length === 1 && selectedElementIds[0] === el.id && isPointInResizeHandle(x, y, el)) {
           setIsResizing(true);
           setIsDrawing(true);
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -345,14 +408,28 @@ export const Canvas: React.FC = () => {
         }
 
         if (isPointInElement(x, y, el)) {
-          setAppState({ selectedElementId: el.id });
-          setDragOffset({ x: x - el.x, y: y - el.y });
-          setIsDrawing(true); 
+          if (e.shiftKey) {
+             setAppState({
+                 selectedElementIds: selectedElementIds.includes(el.id)
+                     ? selectedElementIds.filter(id => id !== el.id)
+                     : [...selectedElementIds, el.id]
+             });
+          } else {
+             if (!selectedElementIds.includes(el.id)) {
+                 setAppState({ selectedElementIds: [el.id] });
+             }
+          }
+          setLastPointerPos({ x, y });
+          setIsDrawing(true);
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
           return;
         }
       }
-      setAppState({ selectedElementId: null });
+      // No element hit — start panning on empty space
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+      setAppState({ selectedElementIds: [] });
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
       return;
     }
 
@@ -363,14 +440,23 @@ export const Canvas: React.FC = () => {
     }
 
     const id = window.crypto.randomUUID();
+    let startX = x, startY = y;
+    if (appState.activeTool === 'line') {
+      const snap = findNearestConnector(x, y);
+      if (snap) {
+        startX = snap.point.x;
+        startY = snap.point.y;
+        setConnectorTarget(snap);
+      }
+    }
     const newElement: CanvasElement = {
       id,
       type: appState.activeTool,
-      x,
-      y,
+      x: startX,
+      y: startY,
       width: 0,
       height: 0,
-      strokeColor: appState.strokeColor, 
+      strokeColor: appState.strokeColor,
       backgroundColor: appState.backgroundColor,
       fillStyle: appState.fillStyle,
       strokeWidth: appState.strokeWidth,
@@ -379,7 +465,7 @@ export const Canvas: React.FC = () => {
       fontSize: appState.fontSize,
       startArrowhead: appState.startArrowhead,
       endArrowhead: appState.endArrowhead,
-      points: [{x, y}],
+      points: [{x: startX, y: startY}],
       seed: Math.floor(Math.random() * 100000000),
     };
     
@@ -389,21 +475,39 @@ export const Canvas: React.FC = () => {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    // Handle panning
+    if (isPanning && panStart) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      setAppState({
+        scrollX: appState.scrollX + dx,
+        scrollY: appState.scrollY + dy,
+      });
+      setPanStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
     if (!isDrawing) return;
     const { x, y } = getPointerCoords(e);
     
-    if (appState.activeTool === 'select' && selectedElementId) {
-      if (draggingLinePoint !== null) {
+    if (appState.activeTool === 'select' && selectedElementIds.length > 0) {
+      if (draggingLinePoint !== null && selectedElementIds.length === 1) {
+         const isEndpoint = draggingLinePoint === 0 || draggingLinePoint === 2;
+         const snap = isEndpoint ? findNearestConnector(x, y, selectedElementIds[0]) : null;
+         setConnectorTarget(snap);
+         const snapX = snap ? snap.point.x : x;
+         const snapY = snap ? snap.point.y : y;
+
          setElements(prev => prev.map(el => {
-            if (el.id === selectedElementId && el.type === 'line' && el.points) {
+            if (el.id === selectedElementIds[0] && el.type === 'line' && el.points) {
                let newPoints = [...el.points];
                if (newPoints.length === 2 && draggingLinePoint === 1) {
                    newPoints = [newPoints[0], {x, y}, newPoints[1]];
                } else if (newPoints.length === 3) {
-                   newPoints[draggingLinePoint] = {x, y};
+                   newPoints[draggingLinePoint] = isEndpoint ? {x: snapX, y: snapY} : {x, y};
                } else if (newPoints.length === 2) {
-                   if (draggingLinePoint === 0) newPoints[0] = {x, y};
-                   if (draggingLinePoint === 2) newPoints[1] = {x, y};
+                   if (draggingLinePoint === 0) newPoints[0] = {x: snapX, y: snapY};
+                   if (draggingLinePoint === 2) newPoints[1] = {x: snapX, y: snapY};
                }
                let startBinding = el.startBinding;
                let endBinding = el.endBinding;
@@ -417,9 +521,9 @@ export const Canvas: React.FC = () => {
          return;
       }
 
-      if (isResizing) {
+      if (isResizing && selectedElementIds.length === 1) {
          setElements(prev => prev.map(el => {
-           if (el.id === selectedElementId) {
+           if (el.id === selectedElementIds[0]) {
              return { ...el, width: x - el.x, height: y - el.y };
            }
            return el;
@@ -427,34 +531,58 @@ export const Canvas: React.FC = () => {
          return;
       }
       
-      if (dragOffset) {
+      if (lastPointerPos) {
+         const dx = x - lastPointerPos.x;
+         const dy = y - lastPointerPos.y;
+         if (dx === 0 && dy === 0) return;
+
          setElements(prev => {
-           let targetEl = prev.find(e => e.id === selectedElementId);
-           if (!targetEl) return prev;
-           const newX = x - dragOffset.x;
-           const newY = y - dragOffset.y;
-           const deltaX = newX - targetEl.x;
-           const deltaY = newY - targetEl.y;
-
-           if (deltaX === 0 && deltaY === 0) return prev;
-
            return prev.map(el => {
-             if (el.id === selectedElementId) {
+             if (selectedElementIds.includes(el.id)) {
                  let newPoints = el.points;
                  if (newPoints) {
-                     newPoints = newPoints.map(p => ({ x: p.x + deltaX, y: p.y + deltaY }));
+                     newPoints = newPoints.map(p => ({ x: p.x + dx, y: p.y + dy }));
                  }
-                 return { ...el, x: newX, y: newY, points: newPoints };
+                 return { ...el, x: el.x + dx, y: el.y + dy, points: newPoints };
              }
              if (el.type === 'line') {
                  let updated = false;
                  let p = el.points ? [...el.points] : [];
-                 if (el.startBinding === selectedElementId && p.length > 0) {
-                     p[0] = { x: p[0].x + deltaX, y: p[0].y + deltaY };
+                 if (el.startBinding && selectedElementIds.includes(el.startBinding) && p.length > 0) {
+                     // Find the moved bound element and snap to its nearest connector
+                     const boundEl = prev.find(e => e.id === el.startBinding);
+                     if (boundEl) {
+                       const movedEl = { ...boundEl, x: boundEl.x + dx, y: boundEl.y + dy };
+                       const connectors = getConnectorPoints(movedEl);
+                       const endPt = p[p.length - 1];
+                       let nearest = connectors[0];
+                       let nearestDist = Infinity;
+                       for (const cp of connectors) {
+                         const d = Math.hypot(endPt.x - cp.x, endPt.y - cp.y);
+                         if (d < nearestDist) { nearestDist = d; nearest = cp; }
+                       }
+                       p[0] = nearest;
+                     } else {
+                       p[0] = { x: p[0].x + dx, y: p[0].y + dy };
+                     }
                      updated = true;
                  }
-                 if (el.endBinding === selectedElementId && p.length > 1) {
-                     p[p.length - 1] = { x: p[p.length - 1].x + deltaX, y: p[p.length - 1].y + deltaY };
+                 if (el.endBinding && selectedElementIds.includes(el.endBinding) && p.length > 1) {
+                     const boundEl = prev.find(e => e.id === el.endBinding);
+                     if (boundEl) {
+                       const movedEl = { ...boundEl, x: boundEl.x + dx, y: boundEl.y + dy };
+                       const connectors = getConnectorPoints(movedEl);
+                       const startPt = p[0];
+                       let nearest = connectors[0];
+                       let nearestDist = Infinity;
+                       for (const cp of connectors) {
+                         const d = Math.hypot(startPt.x - cp.x, startPt.y - cp.y);
+                         if (d < nearestDist) { nearestDist = d; nearest = cp; }
+                       }
+                       p[p.length - 1] = nearest;
+                     } else {
+                       p[p.length - 1] = { x: p[p.length - 1].x + dx, y: p[p.length - 1].y + dy };
+                     }
                      updated = true;
                  }
                  if (updated) {
@@ -464,6 +592,7 @@ export const Canvas: React.FC = () => {
              return el;
            });
          });
+         setLastPointerPos({ x, y });
       }
       return;
     }
@@ -478,11 +607,15 @@ export const Canvas: React.FC = () => {
           height: Math.abs(y - currentElement.y)
         });
       } else if (currentElement.type === 'line') {
+        const snap = findNearestConnector(x, y, currentElement.id);
+        setConnectorTarget(snap);
+        const endX = snap ? snap.point.x : x;
+        const endY = snap ? snap.point.y : y;
         setCurrentElement({
           ...currentElement,
-          points: [{x: currentElement.x, y: currentElement.y}, {x, y}],
-          width: Math.abs(x - currentElement.x),
-          height: Math.abs(y - currentElement.y)
+          points: [{x: currentElement.x, y: currentElement.y}, {x: endX, y: endY}],
+          width: Math.abs(endX - currentElement.x),
+          height: Math.abs(endY - currentElement.y)
         });
       } else {
         setCurrentElement({
@@ -508,7 +641,7 @@ export const Canvas: React.FC = () => {
             targetId: el.id,
             initialValue: el.text || ''
           });
-          setAppState({ selectedElementId: el.id });
+          setAppState({ selectedElementIds: [el.id] });
         }
         return;
       }
@@ -516,36 +649,45 @@ export const Canvas: React.FC = () => {
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (textInput) return; // Prevent finishing draw if just closed text input
+    if (isPanning) {
+      setIsPanning(false);
+      setPanStart(null);
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+
+    if (textInput) return;
 
     if (!isDrawing) return;
     
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     setIsDrawing(false);
     setIsResizing(false);
-    setDraggingLinePoint(null);
+    setConnectorTarget(null);
 
-    // If dragging a point on a select tool line, we hit test to potentially auto-bind endpoints!
-    if (appState.activeTool === 'select' && draggingLinePoint !== null && selectedElementId) {
+    // If dragging a point on a select tool line, bind to nearest connector
+    if (appState.activeTool === 'select' && draggingLinePoint !== null && selectedElementIds.length === 1) {
+        const lineId = selectedElementIds[0];
         setElements(prev => {
-           const el = prev.find(e => e.id === selectedElementId);
+           const el = prev.find(e => e.id === lineId);
            if (el && el.type === 'line' && el.points && el.points.length > 1) {
                let updatedEl = { ...el };
                const startP = el.points[0];
                const endP = el.points[el.points.length - 1];
                if (draggingLinePoint === 0) {
-                   const hit = prev.find(e => e.id !== el.id && e.type !== 'line' && e.type !== 'pencil' && isPointInElement(startP.x, startP.y, e));
-                   updatedEl.startBinding = hit ? hit.id : null;
+                   const snap = findNearestConnector(startP.x, startP.y, el.id);
+                   updatedEl.startBinding = snap ? snap.elementId : null;
                }
                if (draggingLinePoint === 2) {
-                   const hit = prev.find(e => e.id !== el.id && e.type !== 'line' && e.type !== 'pencil' && isPointInElement(endP.x, endP.y, e));
-                   updatedEl.endBinding = hit ? hit.id : null;
+                   const snap = findNearestConnector(endP.x, endP.y, el.id);
+                   updatedEl.endBinding = snap ? snap.elementId : null;
                }
                return prev.map(e => e.id === updatedEl.id ? updatedEl : e);
            }
            return prev;
         });
     }
+    setDraggingLinePoint(null);
 
     if (appState.activeTool === 'select') return;
 
@@ -567,16 +709,23 @@ export const Canvas: React.FC = () => {
       if (p.length > 1) {
         const startP = p[0];
         const endP = p[p.length - 1];
-        const startHit = elements.find(el => el.id !== finalElement.id && el.type !== 'line' && el.type !== 'pencil' && isPointInElement(startP.x, startP.y, el));
-        const endHit = elements.find(el => el.id !== finalElement.id && el.type !== 'line' && el.type !== 'pencil' && isPointInElement(endP.x, endP.y, el));
-        if (startHit) finalElement.startBinding = startHit.id;
-        if (endHit) finalElement.endBinding = endHit.id;
+        const startSnap = findNearestConnector(startP.x, startP.y, finalElement.id);
+        const endSnap = findNearestConnector(endP.x, endP.y, finalElement.id);
+        if (startSnap) {
+          finalElement.startBinding = startSnap.elementId;
+          p[0] = startSnap.point;
+        }
+        if (endSnap) {
+          finalElement.endBinding = endSnap.elementId;
+          p[p.length - 1] = endSnap.point;
+        }
+        finalElement.points = p;
       }
     }
 
     setElements((prev) => [...prev, finalElement]);
     setCurrentElement(null);
-    setAppState({ activeTool: 'select', selectedElementId: currentElement.id }); 
+    setAppState({ activeTool: 'select', selectedElementIds: [currentElement.id] }); 
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -598,14 +747,20 @@ export const Canvas: React.FC = () => {
        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
            return;
        }
-       
-       if ((e.key === 'Backspace' || e.key === 'Delete') && selectedElementId && !textInput) {
-           setElements(prev => prev.filter(el => el.id !== selectedElementId));
-           setAppState({ selectedElementId: null });
+
+       if (e.key === ' ' && !textInput) {
+           e.preventDefault();
+           setSpaceHeld(true);
+           return;
        }
 
-       if (e.key === 'Enter' && selectedElementId && !textInput) {
-           const el = elements.find(e => e.id === selectedElementId);
+       if ((e.key === 'Backspace' || e.key === 'Delete') && selectedElementIds.length > 0 && !textInput) {
+           setElements(prev => prev.filter(el => !selectedElementIds.includes(el.id)));
+           setAppState({ selectedElementIds: [] });
+       }
+
+       if (e.key === 'Enter' && selectedElementIds.length === 1 && !textInput) {
+           const el = elements.find(e => e.id === selectedElementIds[0]);
            if (el && el.type !== 'pencil' && el.type !== 'line') {
                setTextInput({ 
                    x: el.type === 'text' ? el.x : el.x + el.width / 2, 
@@ -618,37 +773,18 @@ export const Canvas: React.FC = () => {
        }
 
        // COPY
-       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selectedElementId && !textInput) {
-           const el = elements.find(e => e.id === selectedElementId);
-           if (el) {
-               setClipboard(JSON.parse(JSON.stringify(el)));
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selectedElementIds.length > 0 && !textInput) {
+           const copied = elements.filter(e => selectedElementIds.includes(e.id));
+           if (copied.length > 0) {
+               setClipboard(JSON.parse(JSON.stringify(copied)));
            }
        }
 
        // PASTE
-       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && clipboard && !textInput) {
-           const newId = window.crypto.randomUUID();
-           const newEl: CanvasElement = JSON.parse(JSON.stringify(clipboard));
-           newEl.id = newId;
-           newEl.x += 20;
-           newEl.y += 20;
-           if (newEl.points) {
-               newEl.points = newEl.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
-           }
-           newEl.seed = Math.floor(Math.random() * 100000000);
-           
-           setElements(prev => [...prev, newEl]);
-           setAppState({ selectedElementId: newId });
-           setClipboard(newEl);
-       }
-
-       // DUPLICATE
-       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedElementId && !textInput) {
-           e.preventDefault(); 
-           const el = elements.find(e => e.id === selectedElementId);
-           if (el) {
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && clipboard.length > 0 && !textInput) {
+           const pastedEls = clipboard.map(c => {
                const newId = window.crypto.randomUUID();
-               const newEl: CanvasElement = JSON.parse(JSON.stringify(el));
+               const newEl: CanvasElement = JSON.parse(JSON.stringify(c));
                newEl.id = newId;
                newEl.x += 20;
                newEl.y += 20;
@@ -656,15 +792,50 @@ export const Canvas: React.FC = () => {
                    newEl.points = newEl.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
                }
                newEl.seed = Math.floor(Math.random() * 100000000);
+               return newEl;
+           });
+           
+           setElements(prev => [...prev, ...pastedEls]);
+           setAppState({ selectedElementIds: pastedEls.map(e => e.id) });
+           setClipboard(pastedEls);
+       }
+
+       // DUPLICATE
+       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedElementIds.length > 0 && !textInput) {
+           e.preventDefault(); 
+           const copied = elements.filter(e => selectedElementIds.includes(e.id));
+           if (copied.length > 0) {
+               const dupeEls = copied.map(c => {
+                   const newId = window.crypto.randomUUID();
+                   const newEl: CanvasElement = JSON.parse(JSON.stringify(c));
+                   newEl.id = newId;
+                   newEl.x += 20;
+                   newEl.y += 20;
+                   if (newEl.points) {
+                       newEl.points = newEl.points.map(p => ({ x: p.x + 20, y: p.y + 20 }));
+                   }
+                   newEl.seed = Math.floor(Math.random() * 100000000);
+                   return newEl;
+               });
                
-               setElements(prev => [...prev, newEl]);
-               setAppState({ selectedElementId: newId });
+               setElements(prev => [...prev, ...dupeEls]);
+               setAppState({ selectedElementIds: dupeEls.map(e => e.id) });
            }
        }
     };
+    const handleKeyUp = (e: KeyboardEvent) => {
+       if (e.key === ' ') {
+           setSpaceHeld(false);
+       }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedElementId, elements, setElements, textInput, setAppState, clipboard, setClipboard]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [selectedElementIds, elements, setElements, textInput, setAppState, clipboard, setClipboard]);
 
   return (
     <React.Fragment>
@@ -679,7 +850,7 @@ export const Canvas: React.FC = () => {
         style={{ 
           touchAction: 'none', 
           display: 'block',
-          cursor: appState.activeTool === 'select' ? (isDrawing ? 'grabbing' : 'grab') : 'crosshair'
+          cursor: isPanning ? 'grabbing' : spaceHeld ? 'grab' : appState.activeTool === 'select' ? 'default' : 'crosshair'
         }}
       />
       {textInput && (
@@ -742,7 +913,7 @@ export const Canvas: React.FC = () => {
                    fontFamily: appState.fontFamily, fontSize: appState.fontSize,
                    seed: Math.floor(Math.random() * 100000000)
                  }]);
-                 setAppState({ selectedElementId: id });
+                 setAppState({ selectedElementIds: [id] });
               }
             } else if (textInput.targetId) {
                setElements(prev => prev.map(el => el.id === textInput.targetId ? { ...el, text: undefined } : el));
