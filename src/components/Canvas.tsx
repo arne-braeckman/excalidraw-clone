@@ -25,6 +25,7 @@ export const Canvas: React.FC = () => {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; x: number; y: number } | null>(null);
 
   const CONNECTOR_SNAP_DISTANCE = 30;
 
@@ -270,6 +271,21 @@ export const Canvas: React.FC = () => {
         drawElement(currentElement);
       }
 
+      // Draw selection box
+      if (selectionBox) {
+        const sx = Math.min(selectionBox.startX, selectionBox.x);
+        const sy = Math.min(selectionBox.startY, selectionBox.y);
+        const sw = Math.abs(selectionBox.x - selectionBox.startX);
+        const sh = Math.abs(selectionBox.y - selectionBox.startY);
+        ctx.fillStyle = 'rgba(105, 101, 219, 0.08)';
+        ctx.fillRect(sx, sy, sw, sh);
+        ctx.strokeStyle = '#6965db';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.setLineDash([]);
+      }
+
       // Draw connector spots on target element
       if (connectorTarget) {
         const targetEl = elements.find(e => e.id === connectorTarget.elementId);
@@ -294,7 +310,7 @@ export const Canvas: React.FC = () => {
     draw();
     window.addEventListener('resize', draw);
     return () => window.removeEventListener('resize', draw);
-  }, [elements, currentElement, appState.zoom, appState.scrollX, appState.scrollY, selectedElementIds, textInput, connectorTarget]);
+  }, [elements, currentElement, appState.zoom, appState.scrollX, appState.scrollY, selectedElementIds, textInput, connectorTarget, selectionBox]);
 
   const getPointerCoords = (e: React.PointerEvent | React.MouseEvent | React.TouchEvent) => {
     let clientX = 0, clientY = 0;
@@ -425,10 +441,10 @@ export const Canvas: React.FC = () => {
           return;
         }
       }
-      // No element hit — start panning on empty space
-      setIsPanning(true);
-      setPanStart({ x: e.clientX, y: e.clientY });
+      // No element hit — start selection box
       setAppState({ selectedElementIds: [] });
+      setSelectionBox({ startX: x, startY: y, x, y });
+      setIsDrawing(true);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       return;
     }
@@ -490,6 +506,11 @@ export const Canvas: React.FC = () => {
     if (!isDrawing) return;
     const { x, y } = getPointerCoords(e);
     
+    if (appState.activeTool === 'select' && selectionBox) {
+      setSelectionBox({ ...selectionBox, x, y });
+      return;
+    }
+
     if (appState.activeTool === 'select' && selectedElementIds.length > 0) {
       if (draggingLinePoint !== null && selectedElementIds.length === 1) {
          const isEndpoint = draggingLinePoint === 0 || draggingLinePoint === 2;
@@ -664,6 +685,35 @@ export const Canvas: React.FC = () => {
     setIsDrawing(false);
     setIsResizing(false);
     setConnectorTarget(null);
+
+    // Finalize selection box
+    if (selectionBox) {
+      const boxMinX = Math.min(selectionBox.startX, selectionBox.x);
+      const boxMaxX = Math.max(selectionBox.startX, selectionBox.x);
+      const boxMinY = Math.min(selectionBox.startY, selectionBox.y);
+      const boxMaxY = Math.max(selectionBox.startY, selectionBox.y);
+      const selected = elements.filter(el => {
+        let elMinX: number, elMinY: number, elMaxX: number, elMaxY: number;
+        if (el.type === 'line' || el.type === 'pencil') {
+          const pts = el.points || [];
+          elMinX = Math.min(...pts.map(p => p.x));
+          elMaxX = Math.max(...pts.map(p => p.x));
+          elMinY = Math.min(...pts.map(p => p.y));
+          elMaxY = Math.max(...pts.map(p => p.y));
+        } else {
+          elMinX = Math.min(el.x, el.x + el.width);
+          elMaxX = Math.max(el.x, el.x + el.width);
+          elMinY = Math.min(el.y, el.y + el.height);
+          elMaxY = Math.max(el.y, el.y + el.height);
+        }
+        return elMinX >= boxMinX && elMaxX <= boxMaxX && elMinY >= boxMinY && elMaxY <= boxMaxY;
+      });
+      if (selected.length > 0) {
+        setAppState({ selectedElementIds: selected.map(el => el.id) });
+      }
+      setSelectionBox(null);
+      return;
+    }
 
     // If dragging a point on a select tool line, bind to nearest connector
     if (appState.activeTool === 'select' && draggingLinePoint !== null && selectedElementIds.length === 1) {
@@ -850,7 +900,7 @@ export const Canvas: React.FC = () => {
         style={{ 
           touchAction: 'none', 
           display: 'block',
-          cursor: isPanning ? 'grabbing' : spaceHeld ? 'grab' : appState.activeTool === 'select' ? 'default' : 'crosshair'
+          cursor: isPanning ? 'grabbing' : spaceHeld ? 'grab' : appState.activeTool === 'select' ? (selectionBox ? 'crosshair' : 'default') : 'crosshair'
         }}
       />
       {textInput && (
