@@ -35,12 +35,32 @@ export const Canvas: React.FC = () => {
     const minY = Math.min(el.y, el.y + el.height);
     const w = Math.abs(el.width);
     const h = Math.abs(el.height);
-    return [
-      { x: minX + w / 2, y: minY },         // top
-      { x: minX + w, y: minY + h / 2 },     // right
-      { x: minX + w / 2, y: minY + h },      // bottom
-      { x: minX, y: minY + h / 2 },          // left
-    ];
+    
+    const points: { x: number; y: number }[] = [];
+    
+    let hSegments = Math.floor(w / 40);
+    if (hSegments < 2) hSegments = 2;
+    if (hSegments % 2 !== 0) hSegments += 1;
+
+    let vSegments = Math.floor(h / 40);
+    if (vSegments < 2) vSegments = 2;
+    if (vSegments % 2 !== 0) vSegments += 1;
+
+    // Top & Bottom edges
+    for (let i = 0; i <= hSegments; i++) {
+        const x = minX + (w * i) / hSegments;
+        points.push({ x, y: minY });         // Top
+        points.push({ x, y: minY + h });     // Bottom
+    }
+
+    // Left & Right edges (exclude corners to avoid duplicates)
+    for (let i = 1; i < vSegments; i++) {
+        const y = minY + (h * i) / vSegments;
+        points.push({ x: minX, y });         // Left
+        points.push({ x: minX + w, y });     // Right
+    }
+
+    return points;
   };
 
   const findNearestConnector = (px: number, py: number, excludeId?: string): { elementId: string; point: { x: number; y: number } } | null => {
