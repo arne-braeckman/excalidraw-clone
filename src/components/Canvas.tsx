@@ -424,43 +424,78 @@ export const Canvas: React.FC = () => {
     const { x, y } = getPointerCoords(e);
 
     if (appState.activeTool === 'select') {
-      for (let i = elements.length - 1; i >= 0; i--) {
-        const el = elements[i];
-        if (selectedElementIds.length === 1 && selectedElementIds[0] === el.id && el.type === 'line') {
-          const handleIdx = getLineHandleClicked(x, y, el);
-          if (handleIdx !== null) {
-            setDraggingLinePoint(handleIdx);
-            setIsDrawing(true);
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
-            return;
+      // 1. Check for handles on currently selected element
+      if (selectedElementIds.length === 1) {
+          const selId = selectedElementIds[0];
+          const el = elements.find(e => e.id === selId);
+          if (el) {
+              if (el.type === 'line') {
+                  const handleIdx = getLineHandleClicked(x, y, el);
+                  if (handleIdx !== null) {
+                      setDraggingLinePoint(handleIdx);
+                      setIsDrawing(true);
+                      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                      return;
+                  }
+              }
+              if (isPointInResizeHandle(x, y, el)) {
+                  setIsResizing(true);
+                  setIsDrawing(true);
+                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                  return;
+              }
           }
-        }
+      }
 
-        if (selectedElementIds.length === 1 && selectedElementIds[0] === el.id && isPointInResizeHandle(x, y, el)) {
-          setIsResizing(true);
-          setIsDrawing(true);
-          (e.target as HTMLElement).setPointerCapture(e.pointerId);
-          return;
-        }
-
-        if (isPointInElement(x, y, el)) {
+      // 2. Check for element selection and cycling
+      const hitElements = elements.filter(el => isPointInElement(x, y, el));
+      
+      if (hitElements.length > 0) {
           if (e.shiftKey) {
-             setAppState({
-                 selectedElementIds: selectedElementIds.includes(el.id)
-                     ? selectedElementIds.filter(id => id !== el.id)
-                     : [...selectedElementIds, el.id]
-             });
+              let selectedHitIdx = -1;
+              for (let i = hitElements.length - 1; i >= 0; i--) {
+                  if (selectedElementIds.includes(hitElements[i].id)) {
+                      selectedHitIdx = i;
+                      break;
+                  }
+              }
+
+              if (selectedHitIdx !== -1) {
+                  if (hitElements.length === 1) {
+                      setAppState({
+                          selectedElementIds: selectedElementIds.filter(id => id !== hitElements[0].id)
+                      });
+                  } else {
+                      let nextIdx = selectedHitIdx - 1;
+                      if (nextIdx < 0) nextIdx = hitElements.length - 1;
+                      
+                      const prevSelectedId = hitElements[selectedHitIdx].id;
+                      const nextToSelectId = hitElements[nextIdx].id;
+                      
+                      const newSelection = selectedElementIds.filter(id => id !== prevSelectedId);
+                      if (!newSelection.includes(nextToSelectId)) {
+                          newSelection.push(nextToSelectId);
+                      }
+                      setAppState({ selectedElementIds: newSelection });
+                  }
+              } else {
+                  const topEl = hitElements[hitElements.length - 1];
+                  setAppState({
+                      selectedElementIds: [...selectedElementIds, topEl.id]
+                  });
+              }
           } else {
-             if (!selectedElementIds.includes(el.id)) {
-                 setAppState({ selectedElementIds: [el.id] });
-             }
+              const topEl = hitElements[hitElements.length - 1];
+              if (!selectedElementIds.includes(topEl.id)) {
+                  setAppState({ selectedElementIds: [topEl.id] });
+              }
           }
           setLastPointerPos({ x, y });
           setIsDrawing(true);
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
           return;
-        }
       }
+
       // No element hit — start selection box
       setAppState({ selectedElementIds: [] });
       setSelectionBox({ startX: x, startY: y, x, y });
